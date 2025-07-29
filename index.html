@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kerr Black Hole Simulation</title>
+    <title>Make Your Own Black Hole</title>
     <style>
         body {
             margin: 0;
@@ -303,7 +303,8 @@
                     vec4 diskTexColor = texture2D(iChannel1, discUV); // Use only disk texture
                     gl_FragColor = vec4(diskTexColor.rgb * pow(blueshift, 3.0), 1.0); // No background influence
                 } else {
-                    gl_FragColor = texture2D(iChannel0, v_uv); // Use background texture only for background
+                    vec2 flippedUV = vec2(v_uv.x, 1.0 - v_uv.y); // Flip vertical coordinate for background
+                    gl_FragColor = texture2D(iChannel0, flippedUV); // Use flipped UV for background texture
                 }
             }
         `;
