@@ -58,6 +58,17 @@
         #showControls:hover {
             background: #666;
         }
+        #textureError {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: red;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 5px 10px;
+            border-radius: 5px;
+            display: none;
+        }
         label {
             margin-right: 10px;
         }
@@ -80,12 +91,13 @@
 </head>
 <body>
     <canvas id="glCanvas"></canvas>
+    <div id="textureError">Failed to load default textures. Please check file paths or server setup.</div>
     <div class="controls">
         <button id="toggleControls">Hide Controls</button>
         <label for="diskTexture">Disk Texture:</label>
         <input type="file" id="diskTexture" accept="image/*">
         <label for="backgroundTexture">Background Texture:</label>
-        <input type="file" id="backgroundTexture" accept="image/*" disabled>
+        <input type="file" id="backgroundTexture" accept="image/*">
         <button id="toggleAnimation">Save my Framerate!</button>
     </div>
     <button id="showControls">Show Controls</button>
@@ -104,7 +116,7 @@
             attribute vec2 a_position;
             varying vec2 v_uv;
             void main() {
-                v_uv = (a_position + 1.0) * 0.5; // Map to [0, 1] for texture
+                v_uv = (a_position + 1.0) * 0.5;
                 gl_Position = vec4(a_position, 0.0, 1.0);
             }
         `;
@@ -114,8 +126,8 @@
             precision highp float;
             uniform vec2 iResolution;
             uniform float iTime;
-            uniform sampler2D iChannel0; // Background texture
-            uniform sampler2D iChannel1; // Disk texture
+            uniform sampler2D iChannel0;
+            uniform sampler2D iChannel1;
             varying vec2 v_uv;
 
             #define PI 3.1415926538
@@ -123,8 +135,8 @@
             float tilt = 0.1;
             float zoom = 1.5;
             float a = 0.6;
-            float discMin = 3.83 * 0.75; // Shrink by 25%
-            float discMax = 15.0 * 0.75; // Shrink by 25%
+            float discMin = 3.83 * 0.75;
+            float discMax = 15.0 * 0.75;
             float eps = 0.02;
             float dtau = 0.2;
             const int maxSteps = 200;
@@ -248,7 +260,7 @@
 
             void main() {
                 vec2 uv = (2.0 * gl_FragCoord.xy - iResolution.xy) / iResolution.x;
-                tilt = sin(iTime * 0.1) * 0.3; // -30° to 30° wobble
+                tilt = sin(iTime * 0.1) * 0.3;
 
                 float x = sqrt(camR * camR + a * a) * cos(tilt);
                 float z = camR * sin(tilt);
@@ -279,7 +291,7 @@
                         if (r > discMin && r < discMax) {
                             hitDisc = true;
                             discUV = (intersectPos.yz / discMax + 1.0) * 0.5;
-                            float angle = iTime * 0.2; // Doubled disk spin speed
+                            float angle = iTime * 0.2;
                             float s = sin(angle);
                             float c = cos(angle);
                             discUV -= 0.5;
@@ -298,18 +310,17 @@
                 }
 
                 if (captured) {
-                    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); // 100% black for black hole
+                    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
                 } else if (hitDisc) {
-                    vec4 diskTexColor = texture2D(iChannel1, discUV); // Use only disk texture
-                    gl_FragColor = vec4(diskTexColor.rgb * pow(blueshift, 3.0), 1.0); // No background influence
+                    vec4 diskTexColor = texture2D(iChannel1, discUV);
+                    gl_FragColor = vec4(diskTexColor.rgb * pow(blueshift, 3.0), 1.0);
                 } else {
-                    vec2 flippedUV = vec2(v_uv.x, 1.0 - v_uv.y); // Flip vertical coordinate for background
-                    gl_FragColor = texture2D(iChannel0, flippedUV); // Use flipped UV for background texture
+                    vec2 flippedUV = vec2(v_uv.x, 1.0 - v_uv.y);
+                    gl_FragColor = texture2D(iChannel0, flippedUV);
                 }
             }
         `;
 
-        // Shader compilation with detailed error handling
         function compileShader(source, type) {
             const shader = gl.createShader(type);
             gl.shaderSource(shader, source);
@@ -323,17 +334,14 @@
             return shader;
         }
 
-        // Compile shaders
         const vertexShader = compileShader(vsSource, gl.VERTEX_SHADER);
         const fragmentShader = compileShader(fsSource, gl.FRAGMENT_SHADER);
 
-        // Check if both shaders compiled successfully
         if (!vertexShader || !fragmentShader) {
             alert('Failed to compile shaders. Check console for details.');
             throw new Error('Shader compilation failed');
         }
 
-        // Create and link program
         const program = gl.createProgram();
         gl.attachShader(program, vertexShader);
         gl.attachShader(program, fragmentShader);
@@ -347,7 +355,6 @@
 
         gl.useProgram(program);
 
-        // Set up vertex buffer
         const positionBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
         const positions = new Float32Array([
@@ -362,11 +369,9 @@
         gl.enableVertexAttribArray(positionLocation);
         gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
 
-        // Uniform locations
         const resolutionLocation = gl.getUniformLocation(program, 'iResolution');
         const timeLocation = gl.getUniformLocation(program, 'iTime');
 
-        // Animation toggle
         let isAnimating = true;
         let lastTime = performance.now();
         const toggleButton = document.getElementById('toggleAnimation');
@@ -379,7 +384,6 @@
             }
         });
 
-        // Control hide/show toggle
         const controls = document.querySelector('.controls');
         const toggleControlsButton = document.getElementById('toggleControls');
         const showControlsButton = document.getElementById('showControls');
@@ -392,48 +396,36 @@
             showControlsButton.style.display = 'none';
         });
 
-        // Texture loading with background lock
         let diskTexture = null;
         let backgroundTexture = null;
         const diskTextureInput = document.getElementById('diskTexture');
         const backgroundTextureInput = document.getElementById('backgroundTexture');
+        const textureError = document.getElementById('textureError');
 
-        diskTextureInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                const image = new Image();
-                image.onload = () => {
-                    if (diskTexture) gl.deleteTexture(diskTexture); // Clear previous texture
-                    diskTexture = createTextureFromImage(image, gl.TEXTURE_2D, 1);
-                    backgroundTextureInput.disabled = false; // Enable background input after disk upload
-                };
-                image.src = URL.createObjectURL(file);
-            }
-        });
-
-        backgroundTextureInput.addEventListener('change', (e) => {
-            if (!diskTexture) {
-                alert('Please upload a disk texture first.');
-                e.preventDefault(); // Prevent file upload
-                backgroundTextureInput.value = ''; // Clear the input
-                return;
-            }
-            const file = e.target.files[0];
-            if (file) {
-                const image = new Image();
-                image.onload = () => {
-                    if (backgroundTexture) gl.deleteTexture(backgroundTexture); // Clear previous texture
-                    backgroundTexture = createTextureFromImage(image, gl.TEXTURE_2D, 0);
-                };
-                image.src = URL.createObjectURL(file);
-            }
-        });
+        function createFallbackTexture(unit) {
+            const texture = gl.createTexture();
+            gl.activeTexture(gl.TEXTURE0 + unit);
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            const pixel = new Uint8Array([255, 255, 255, 255]); // White pixel
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.uniform1i(gl.getUniformLocation(program, unit === 0 ? 'iChannel0' : 'iChannel1'), unit);
+            return texture;
+        }
 
         function createTextureFromImage(image, type, unit) {
+            console.log(`Creating texture for unit ${unit} with image dimensions ${image.width}x${image.height}`);
             gl.activeTexture(gl.TEXTURE0 + unit);
             const texture = gl.createTexture();
             gl.bindTexture(type, texture);
             gl.texImage2D(type, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+            if (gl.getError() !== gl.NO_ERROR) {
+                console.error(`WebGL error when creating texture for unit ${unit}`);
+                return null;
+            }
             gl.texParameteri(type, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
             gl.texParameteri(type, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
             gl.texParameteri(type, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -442,7 +434,73 @@
             return texture;
         }
 
-        // Animation with frame rate limiting and responsive scaling
+        // Default texture URLs
+        const defaultDiskTextureUrl = 'https://res.cloudinary.com/dadjewcmh/image/upload/v1755036799/oj8vbrw2hbb0kzzywpfo.png';
+        const defaultBackgroundTextureUrl = 'https://res.cloudinary.com/dadjewcmh/image/upload/v1755219943/wxs5irpnqxr6d10jybqu.jpg';
+
+        function loadDefaultTexture(url, unit, callback) {
+            if (!url) {
+                console.warn(`No default texture URL provided for unit ${unit}`);
+                callback(createFallbackTexture(unit));
+                return;
+            }
+            const image = new Image();
+            image.crossOrigin = 'anonymous';
+            image.onload = () => {
+                console.log(`Successfully loaded texture from ${url}`);
+                const texture = createTextureFromImage(image, gl.TEXTURE_2D, unit);
+                callback(texture || createFallbackTexture(unit));
+            };
+            image.onerror = () => {
+                console.error(`Failed to load default texture from ${url}. Using fallback.`);
+                textureError.style.display = 'block';
+                callback(createFallbackTexture(unit));
+            };
+            image.src = url;
+        }
+
+        // Load default textures
+        loadDefaultTexture(defaultDiskTextureUrl, 1, (texture) => {
+            diskTexture = texture;
+            backgroundTextureInput.disabled = !diskTexture;
+        });
+        loadDefaultTexture(defaultBackgroundTextureUrl, 0, (texture) => {
+            backgroundTexture = texture;
+        });
+
+        diskTextureInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const image = new Image();
+                image.onload = () => {
+                    if (diskTexture) gl.deleteTexture(diskTexture);
+                    diskTexture = createTextureFromImage(image, gl.TEXTURE_2D, 1);
+                    backgroundTextureInput.disabled = false;
+                    textureError.style.display = 'none'; // Hide error on successful upload
+                };
+                image.src = URL.createObjectURL(file);
+            }
+        });
+
+        backgroundTextureInput.addEventListener('change', (e) => {
+            if (!diskTexture) {
+                alert('Please upload a disk texture first.');
+                e.preventDefault();
+                backgroundTextureInput.value = '';
+                return;
+            }
+            const file = e.target.files[0];
+            if (file) {
+                const image = new Image();
+                image.onload = () => {
+                    if (backgroundTexture) gl.deleteTexture(backgroundTexture);
+                    backgroundTexture = createTextureFromImage(image, gl.TEXTURE_2D, 0);
+                    textureError.style.display = 'none'; // Hide error on successful upload
+                };
+                image.src = URL.createObjectURL(file);
+            }
+        });
+
         let startTime = performance.now();
         const targetFPS = 30;
         const frameInterval = 1000 / targetFPS;
@@ -472,7 +530,7 @@
             if (!isAnimating) return;
 
             if (currentTime - lastTime >= frameInterval) {
-                resizeCanvas(); // Update canvas size on each frame
+                resizeCanvas();
                 gl.clear(gl.COLOR_BUFFER_BIT);
 
                 gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
@@ -486,13 +544,12 @@
             requestAnimationFrame(render);
         }
 
-        // Resize on window change
         window.addEventListener('resize', () => {
             resizeCanvas();
             if (isAnimating) render(performance.now());
         });
 
-        resizeCanvas(); // Initial resize
+        resizeCanvas();
         render(performance.now());
     </script>
 </body>
